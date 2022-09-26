@@ -16,10 +16,10 @@
                 @Html.DisplayNameFor(model => model.Id)
             </th>
             <th>
-                @Html.DisplayNameFor(model => model.Name)
+                Department @Html.DisplayNameFor(model => model.Name)
             </th>
             <th>
-                Division
+                Division @Html.DisplayNameFor(model => model.Division.Name)
             </th>
             <th>Action</th>
         </tr>
@@ -34,7 +34,7 @@
                 @Html.DisplayFor(modelItem => item.Name)
             </td>
             <td>
-                @Html.DisplayFor(modelItem => item.Div.Name)
+                @Html.DisplayFor(modelItem => item.Division.Name)
             </td>
             <td>
                 @Html.ActionLink("Edit", "Edit", new { id=item.Id }, null) |

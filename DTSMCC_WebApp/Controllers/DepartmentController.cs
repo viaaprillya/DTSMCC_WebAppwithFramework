@@ -8,74 +8,46 @@ using DTSMCC_WebApp.Models;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Http;
 using System.Data;
+using DTSMCC_WebApp.Context;
+using Microsoft.EntityFrameworkCore;
 
 namespace DTSMCC_WebApp.Controllers
 {
     public class DepartmentController : Controller
     {
-        SqlConnection connection;
-        string connectionString = "Data Source=TARDIS;Initial Catalog=DTSMCC01;User ID=viaaprillya;Password=1234567";
+        MyContext myContext;
 
+        public DepartmentController(MyContext myContext)
+        {
+            this.myContext = myContext;
+        }
         //READ
         public IActionResult Index()
         {
-            string query = "SELECT Department.Id, Department.Name, Divisions.Id, Divisions.Name FROM Department JOIN Divisions ON Department.Division_Id=Divisions.Id";
-            connection = new SqlConnection(connectionString);
-            SqlCommand sqlCommand = new SqlCommand(query, connection);
-            List<Department> Departments = new List<Department>();
-
-            try
-            {
-                connection.Open();
-                using (SqlDataReader reader = sqlCommand.ExecuteReader())
-                {
-                    if (reader.HasRows)
-                    {
-                        while (reader.Read())
-                        {
-                            Department department = new Department();
-                            Division division = new Division();
-                            department.Id = (int)(reader[0]);
-                            department.Name = reader[1].ToString();
-                            division.Id = (int)(reader[2]);
-                            division.Name = reader[3].ToString();
-                            department.Div = division;
-                            Departments.Add(department);
-                        }
-                    }
-                }
-                connection.Close();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.InnerException);
-            }
-            return View(Departments);
+            var dept = myContext.Departments.Include(x=>x.Division).ToList();
+            return View(dept);
         }
 
         //CREATE
         public IActionResult Create()
         {
-            string query = "SELECT * FROM Divisions";
-            connection = new SqlConnection(connectionString);
-            SqlDataAdapter da = new SqlDataAdapter(query, connection);
-            DataTable dt = new DataTable();
-            da.Fill(dt);
-            ViewBag.divisions = ToSelectList(dt, "Id", "Name");
+            var div = myContext.Divisions.ToList();
+            ViewBag.divisions = ToSelectList(div, "Id", "Name");
             return View();
         }
 
-        [NonAction]
-        public SelectList ToSelectList(DataTable table, string valueField, string textField)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public SelectList ToSelectList(List<Division> divisions, string valueField, string textField)
         {
             List<SelectListItem> list = new List<SelectListItem>();
 
-            foreach (DataRow row in table.Rows)
+            foreach (var div in divisions)
             {
                 list.Add(new SelectListItem()
                 {
-                    Text = row[textField].ToString(),
-                    Value = row[valueField].ToString()
+                    Text = div.Name.ToString(),
+                    Value = div.Id.ToString()
                 });
             }
 
@@ -85,191 +57,56 @@ namespace DTSMCC_WebApp.Controllers
         [HttpPost]
         public IActionResult Create(Department dept)
         {
-
-            using (SqlConnection sqlConnection = new SqlConnection(connectionString))
+            if (ModelState.IsValid) 
             {
-
-                sqlConnection.Open();
-                SqlTransaction sqlTransaction = sqlConnection.BeginTransaction();
-
-                SqlCommand sqlCommand = sqlConnection.CreateCommand();
-                sqlCommand.Transaction = sqlTransaction;
-
-                SqlParameter deptID = new SqlParameter();
-                deptID.ParameterName = "@deptID";
-                deptID.Value = dept.Id;
-
-                SqlParameter deptName = new SqlParameter();
-                deptName.ParameterName = "@deptName";
-                deptName.Value = dept.Name;
-
-                SqlParameter div = new SqlParameter();
-                div.ParameterName = "@div";
-                div.Value = dept.Div.Id;
-
-                sqlCommand.Parameters.Add(deptID);
-                sqlCommand.Parameters.Add(deptName);
-                sqlCommand.Parameters.Add(div);
-                try
+                myContext.Departments.Add(dept);
+                var result = myContext.SaveChanges();
+                if (result > 0)
                 {
-                    sqlCommand.CommandText = "INSERT INTO Department " +
-                        "(Id, Name, Division_Id) VALUES (@deptID, @deptName, @div)";
-                    sqlCommand.ExecuteNonQuery();
-                    sqlTransaction.Commit();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.InnerException);
+                    return RedirectToAction("Index");
                 }
             }
-            return RedirectToAction("Index");
+            return View();
         }
 
         public IActionResult Edit(int id)
         {
-            string query = "SELECT * FROM Divisions";
-            connection = new SqlConnection(connectionString);
-            SqlDataAdapter da = new SqlDataAdapter(query, connection);
-            DataTable dt = new DataTable();
-            da.Fill(dt);
-            ViewBag.divisions = ToSelectList(dt, "Id", "Name");
+            var div = myContext.Divisions.ToList();
+            ViewBag.divisions = ToSelectList(div, "Id", "Name");
 
-
-            Department dept = new Department();
-            dept.Id = id;
-
-            Division div = new Division();
-            using (SqlConnection sqlConnection = new SqlConnection(connectionString))
-            {
-                SqlCommand sqlCommand = new SqlCommand();
-                sqlConnection.Open();
-                SqlTransaction sqlTransaction = sqlConnection.BeginTransaction();
-                sqlCommand.Connection = sqlConnection;
-                sqlCommand.Transaction = sqlTransaction;
-                sqlCommand.CommandText = "SELECT * FROM Department WHERE Id = @deptID";
-                sqlCommand.Parameters.Add("@deptID", SqlDbType.Int).Value = id;
-
-                using (SqlDataReader read = sqlCommand.ExecuteReader())
-                {
-                    while (read.Read())
-                    {
-                        dept.Id = (int)read[0];
-                        dept.Name = read[1].ToString();
-                        div.Id = (int)read[2];
-                    }
-                    dept.Div = div;
-                }
-            }
+            var dept = myContext.Departments.Where(d => d.Id == id).First();
             return View(dept);
         }
 
         [HttpPost, ActionName("Edit")]
         public IActionResult EditConfirmed(Department dept)
         {
-            using (SqlConnection sqlConnection = new SqlConnection(connectionString))
+            if (ModelState.IsValid)
             {
-
-                sqlConnection.Open();
-                SqlTransaction sqlTransaction = sqlConnection.BeginTransaction();
-
-                SqlCommand sqlCommand = sqlConnection.CreateCommand();
-                sqlCommand.Transaction = sqlTransaction;
-
-                SqlParameter deptID = new SqlParameter();
-                deptID.ParameterName = "@deptID";
-                deptID.Value = dept.Id;
-
-                SqlParameter deptName = new SqlParameter();
-                deptName.ParameterName = "@deptName";
-                deptName.Value = dept.Name;
-
-                SqlParameter div = new SqlParameter();
-                div.ParameterName = "@div";
-                div.Value = dept.Div.Id;
-
-                sqlCommand.Parameters.Add(deptID);
-                sqlCommand.Parameters.Add(deptName);
-                sqlCommand.Parameters.Add(div);
-                try
+                myContext.Departments.Update(dept);
+                var result = myContext.SaveChanges();
+                if (result > 0)
                 {
-                    sqlCommand.CommandText = "UPDATE Department " +
-                        "SET Name=@deptName, Division_Id=@div WHERE Id=@deptID";
-                    sqlCommand.ExecuteNonQuery();
-                    sqlTransaction.Commit();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.InnerException);
+                    return RedirectToAction("Index");
                 }
             }
-            return RedirectToAction("Index");
+            return View();
         }
-    
+
 
         public IActionResult Delete(int id)
         {
-            Department dept = new Department();
-            dept.Id = id;
-            using (SqlConnection sqlConnection = new SqlConnection(connectionString))
-            {
-                sqlConnection.Open();
-                SqlTransaction sqlTransaction = sqlConnection.BeginTransaction();
-
-                SqlCommand sqlCommand = sqlConnection.CreateCommand();
-                sqlCommand.Transaction = sqlTransaction;
-
-                SqlParameter Id = new SqlParameter();
-                Id.ParameterName = "@id";
-                Id.Value = id;
-
-                sqlCommand.Parameters.Add(Id);
-
-
-                try
-                {
-                    sqlCommand.CommandText = "SELECT Name FROM Department WHERE Id = @id ";
-                    dept.Name = sqlCommand.ExecuteScalar().ToString();
-                    sqlTransaction.Commit();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.InnerException);
-                }
-            }
+            var dept = myContext.Departments.Where(d => d.Id == id).First();
             return View(dept);
         }
 
         [HttpPost, ActionName("Delete")]
-        public IActionResult DeleteConfirmed(int id)
+        public IActionResult DeleteConfirmed(Department dept)
         {
-            Console.WriteLine("print id :"+id);
-            using (SqlConnection sqlConnection = new SqlConnection(connectionString))
-            {
-                sqlConnection.Open();
-                SqlTransaction sqlTransaction = sqlConnection.BeginTransaction();
-
-                SqlCommand sqlCommand = sqlConnection.CreateCommand();
-                sqlCommand.Transaction = sqlTransaction;
-
-                SqlParameter Id = new SqlParameter();
-                Id.ParameterName = "@id";
-                Id.Value = id;
-
-                sqlCommand.Parameters.Add(Id);
-
-
-                try
-                {
-                    sqlCommand.CommandText = "DELETE FROM Department WHERE Id = @id";
-                    sqlCommand.ExecuteNonQuery();
-                    sqlTransaction.Commit();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.InnerException);
-                }
-            }
+            myContext.Departments.Remove((Department)dept);
+            myContext.SaveChanges();
             return RedirectToAction("Index");
+            
         }
     }
 }
